@@ -13,7 +13,7 @@ struct KakeiboMVP2App: App {
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            AddExpenseView()
                 .environment(\.managedObjectContext, persistenceController.container.viewContext)
         }
     }

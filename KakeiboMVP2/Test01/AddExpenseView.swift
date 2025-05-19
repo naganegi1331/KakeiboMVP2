@@ -15,6 +15,11 @@ struct AddExpenseView: View {
     var body: some View {
         NavigationView {
             VStack {
+                
+                Text("合計金額: \(totalAmount, format: .currency(code: "JPY"))")
+                    .font(.headline)
+                    .padding()
+                
                 TextField("支出金額を入力", text: $inputAmount)
                     .textFieldStyle(RoundedBorderTextFieldStyle())
                     .keyboardType(.decimalPad)
@@ -86,6 +91,11 @@ struct AddExpenseView: View {
         formatter.timeStyle = .medium
         return formatter
     }()
+    
+    private var totalAmount: Double {
+        items.reduce(0) {$0 + $1.amount}
+    }
+    
 }
 
 
