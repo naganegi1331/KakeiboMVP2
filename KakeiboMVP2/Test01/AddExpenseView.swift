@@ -1,8 +1,14 @@
-
 import SwiftUI
 import CoreData
+import CloudKit
 
 struct AddExpenseView: View {
+    // Wrapper to allow UICloudSharingController to be used with .sheet(item:)
+    struct CloudShareControllerWrapper: Identifiable {
+        let id = UUID()
+        let controller: UICloudSharingController
+    }
+
     @Environment(\.managedObjectContext) private var viewContext
     @FetchRequest(
         sortDescriptors: [NSSortDescriptor(keyPath: \Expense.date, ascending: false)],
@@ -11,6 +17,8 @@ struct AddExpenseView: View {
     
     @State private var inputAmount: String = ""
     @State private var inputMemo: String = ""
+    @State private var monthlyBudget: Double = 0
+    @State private var shareController: CloudShareControllerWrapper?
     
     var body: some View {
         NavigationView {
@@ -19,6 +27,22 @@ struct AddExpenseView: View {
                 Text("合計金額: \(totalAmount, format: .currency(code: "JPY"))")
                     .font(.headline)
                     .padding()
+                
+                VStack(alignment: .leading) {
+                    Text("今月の予算: \(Int(monthlyBudget), format: .currency(code: "JPY"))")
+                        .font(.subheadline)
+                    
+                    TextField("予算を入力", value: $monthlyBudget, format: .number)
+                        .textFieldStyle(RoundedBorderTextFieldStyle())
+                        .keyboardType(.numberPad)
+                        .padding()
+                    
+                    
+                    ProgressView(value: budgetProgress)
+                        .progressViewStyle(.linear)
+                        .accentColor(budgetProgress >= 1.0 ? .red : .blue)
+                    
+                }.padding(.horizontal)
                 
                 TextField("支出金額を入力", text: $inputAmount)
                     .textFieldStyle(RoundedBorderTextFieldStyle())
@@ -30,13 +54,37 @@ struct AddExpenseView: View {
                     .keyboardType(.default)
                     .padding()
                 
-                
                 Button {
                     addExpense()
                 } label: {
                     Label("保存", systemImage: "square.and.arrow.up")
                 }
-                .padding()
+
+                // デバッグ画面への遷移ボタンを追加
+                NavigationLink(destination: DebugView()) {
+                    Label("デバッグ画面", systemImage: "gear")
+                        .foregroundColor(.orange)
+                }
+                .padding(.top, 10)
+                
+                Button("家族と共有") {
+                    let ids = items.map(\.objectID)
+                    ShareManager.shared.share(objects: ids, in: PersistenceController.shared.container) { result in
+                        switch result {
+                        case .success(let ckShare):
+                            let uiController = UICloudSharingController(share: ckShare,
+                                                                        container: CloudContainer.shared)
+                            shareController = CloudShareControllerWrapper(controller: uiController)
+                        case .failure(let e):
+                            print("Share error:", e)
+                        }
+                    }
+                }
+                .sheet(item: $shareController) { wrapper in
+                    ShareSheet(controller: wrapper.controller)
+                }
+                
+                
                 List {
                     ForEach(items) { item in
                         HStack {
@@ -56,6 +104,7 @@ struct AddExpenseView: View {
             }
         }
     }
+    
     private func addExpense() {
         guard let amount = Double(inputAmount) else { return }
         let newExpense = Expense(context: viewContext)
@@ -96,13 +145,21 @@ struct AddExpenseView: View {
         items.reduce(0) {$0 + $1.amount}
     }
     
+    private var budgetProgress: Double {
+        guard monthlyBudget > 0 else { return 0 }
+        return min(totalAmount / monthlyBudget, 1)
+    }
+    
+    struct ShareSheet: UIViewControllerRepresentable {
+        let controller: UICloudSharingController
+        func makeUIViewController(context: Context) -> UICloudSharingController { controller }
+        func updateUIViewController(_ uiViewController: UICloudSharingController, context: Context) {}
+    }
 }
-
 
 
 
 #Preview {
     AddExpenseView()
-//        .environment(\.managedObjectContext, PersistenceController.preview.container.viewContext)
-//
+        .environment(\.managedObjectContext, PersistenceController.preview.container.viewContext)
 }
